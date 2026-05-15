@@ -64,6 +64,10 @@ describe('Claude Code MCP E2E Tests', () => {
             stateless: expect.objectContaining({
               type: 'boolean',
             }),
+            permissionMode: expect.objectContaining({
+              type: 'string',
+              enum: expect.arrayContaining(['bypassPermissions', 'default', 'plan']),
+            }),
           }),
           required: ['prompt'],
         }),

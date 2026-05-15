@@ -23,7 +23,8 @@ vi.mock('@modelcontextprotocol/sdk/types.js', () => ({
   CallToolRequestSchema: { name: 'callTool' },
   ErrorCode: {
     InternalError: 'InternalError',
-    MethodNotFound: 'MethodNotFound'
+    MethodNotFound: 'MethodNotFound',
+    InvalidParams: 'InvalidParams'
   },
   McpError: vi.fn().mockImplementation((code, message) => {
     const error = new Error(message);
@@ -520,6 +521,82 @@ describe('ClaudeCodeServer Unit Tests', () => {
       const result = await promise;
       expect(result.content[0].type).toBe('text');
       expect(result.content[0].text).toBe('tool output');
+      expect(mockSpawn.mock.calls[0][1]).toContain('--dangerously-skip-permissions');
+      expect(mockSpawn.mock.calls[0][1]).not.toContain('--permission-mode');
+    });
+
+    it('should pass explicit Claude permission mode without bypassing permissions', async () => {
+      mockHomedir.mockReturnValue('/home/user');
+      mockExistsSync.mockReturnValue(true);
+
+      const module = await import('../server.js');
+      const { ClaudeCodeServer } = module;
+
+      const server = new ClaudeCodeServer();
+      const mockServerInstance = vi.mocked(Server).mock.results[0].value;
+      const callToolCall = mockServerInstance.setRequestHandler.mock.calls.find(
+        (call: any[]) => call[0].name === 'callTool'
+      );
+
+      const handler = callToolCall[1];
+      const mockProcess = createMockProcess();
+      mockSpawn.mockReturnValue(mockProcess);
+
+      const promise = handler({
+        params: {
+          name: 'claude_code',
+          arguments: {
+            prompt: 'test prompt',
+            workFolder: process.platform === 'win32' ? 'C:\\tmp' : '/tmp',
+            permissionMode: 'default'
+          }
+        }
+      });
+
+      setTimeout(() => {
+        mockProcess.stdout['data']('tool output');
+        mockProcess.emit('close', 0);
+      }, 10);
+
+      await promise;
+      const spawnArgs = mockSpawn.mock.calls[0][1] as string[];
+      expect(spawnArgs).toContain('--permission-mode');
+      expect(spawnArgs).toContain('default');
+      expect(spawnArgs).not.toContain('--dangerously-skip-permissions');
+    });
+
+    it('should reject invalid Claude permission mode', async () => {
+      mockHomedir.mockReturnValue('/home/user');
+      mockExistsSync.mockReturnValue(true);
+
+      const module = await import('../server.js');
+      const { ClaudeCodeServer } = module;
+
+      const server = new ClaudeCodeServer();
+      const mockServerInstance = vi.mocked(Server).mock.results[0].value;
+      const callToolCall = mockServerInstance.setRequestHandler.mock.calls.find(
+        (call: any[]) => call[0].name === 'callTool'
+      );
+
+      const handler = callToolCall[1];
+      const spawnCallsBefore = mockSpawn.mock.calls.length;
+
+      let caughtError: unknown;
+      try {
+        await handler({
+          params: {
+            name: 'claude_code',
+            arguments: {
+              prompt: 'test prompt',
+              permissionMode: 'sandbox'
+            }
+          }
+        });
+      } catch (error) {
+        caughtError = error;
+      }
+      expect(caughtError).toBeTruthy();
+      expect(mockSpawn.mock.calls).toHaveLength(spawnCallsBefore);
     });
 
     it('should pass CLAUDE_CLI_TIMEOUT_SECONDS to Claude CLI execution', async () => {

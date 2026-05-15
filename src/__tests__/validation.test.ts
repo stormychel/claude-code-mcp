@@ -20,7 +20,8 @@ vi.mock('@modelcontextprotocol/sdk/types.js', () => ({
   CallToolRequestSchema: { name: 'callTool' },
   ErrorCode: { 
     InternalError: 'InternalError',
-    MethodNotFound: 'MethodNotFound'
+    MethodNotFound: 'MethodNotFound',
+    InvalidParams: 'InvalidParams'
   },
   McpError: vi.fn().mockImplementation((code, message) => {
     const error = new Error(message);
@@ -85,12 +86,14 @@ describe('Argument Validation Tests', () => {
       // Extract schema from tool definition
       const schema = z.object({
         prompt: z.string(),
-        workFolder: z.string().optional()
+        workFolder: z.string().optional(),
+        permissionMode: z.enum(['acceptEdits', 'auto', 'bypassPermissions', 'default', 'dontAsk', 'plan']).optional()
       });
       
       // Test valid cases
       expect(() => schema.parse({ prompt: 'test' })).not.toThrow();
       expect(() => schema.parse({ prompt: 'test', workFolder: '/tmp' })).not.toThrow();
+      expect(() => schema.parse({ prompt: 'test', permissionMode: 'default' })).not.toThrow();
     });
 
     it('should reject invalid arguments', async () => {
@@ -116,19 +119,22 @@ describe('Argument Validation Tests', () => {
       // Extract schema from tool definition
       const schema = z.object({
         prompt: z.string(),
-        workFolder: z.string().optional()
+        workFolder: z.string().optional(),
+        permissionMode: z.enum(['acceptEdits', 'auto', 'bypassPermissions', 'default', 'dontAsk', 'plan']).optional()
       });
       
       // Test invalid cases
       expect(() => schema.parse({})).toThrow(); // Missing prompt
       expect(() => schema.parse({ prompt: 123 })).toThrow(); // Wrong type
       expect(() => schema.parse({ prompt: 'test', workFolder: 123 })).toThrow(); // Wrong workFolder type
+      expect(() => schema.parse({ prompt: 'test', permissionMode: 'sandbox' })).toThrow(); // Unknown permission mode
     });
 
     it('should handle missing required fields', async () => {
       const schema = z.object({
         prompt: z.string(),
-        workFolder: z.string().optional()
+        workFolder: z.string().optional(),
+        permissionMode: z.enum(['acceptEdits', 'auto', 'bypassPermissions', 'default', 'dontAsk', 'plan']).optional()
       });
       
       try {
@@ -142,7 +148,8 @@ describe('Argument Validation Tests', () => {
     it('should allow optional fields to be undefined', async () => {
       const schema = z.object({
         prompt: z.string(),
-        workFolder: z.string().optional()
+        workFolder: z.string().optional(),
+        permissionMode: z.enum(['acceptEdits', 'auto', 'bypassPermissions', 'default', 'dontAsk', 'plan']).optional()
       });
       
       const result = schema.parse({ prompt: 'test' });
@@ -152,7 +159,8 @@ describe('Argument Validation Tests', () => {
     it('should handle extra fields gracefully', async () => {
       const schema = z.object({
         prompt: z.string(),
-        workFolder: z.string().optional()
+        workFolder: z.string().optional(),
+        permissionMode: z.enum(['acceptEdits', 'auto', 'bypassPermissions', 'default', 'dontAsk', 'plan']).optional()
       });
       
       // By default, Zod strips unknown keys

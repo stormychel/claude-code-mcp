@@ -142,11 +142,19 @@ interface ClaudeCodeArgs {
   sessionId?: string;
   messages?: ConversationMessage[];
   stateless?: boolean;
+  permissionMode?: ClaudePermissionMode;
 }
 
 interface ConversationMessage {
   role: 'user' | 'assistant';
   content: string;
+}
+
+const CLAUDE_PERMISSION_MODES = ['acceptEdits', 'auto', 'bypassPermissions', 'default', 'dontAsk', 'plan'] as const;
+type ClaudePermissionMode = (typeof CLAUDE_PERMISSION_MODES)[number];
+
+function isClaudePermissionMode(value: unknown): value is ClaudePermissionMode {
+  return typeof value === 'string' && (CLAUDE_PERMISSION_MODES as readonly string[]).includes(value);
 }
 
 interface ClaudeCliResponse {
@@ -432,6 +440,12 @@ export class ClaudeCodeServer {
                 description: 'Disable session continuity for this call.',
                 default: false,
               },
+              permissionMode: {
+                type: 'string',
+                enum: [...CLAUDE_PERMISSION_MODES],
+                description: 'Claude Code permission mode. Defaults to bypassPermissions for backwards compatibility; use default, acceptEdits, auto, dontAsk, or plan to avoid bypassing permission checks.',
+                default: 'bypassPermissions',
+              },
             },
             required: ['prompt'],
           },
@@ -490,6 +504,14 @@ export class ClaudeCodeServer {
       }
 
       const stateless = toolArguments.stateless === true;
+      const permissionMode =
+        toolArguments.permissionMode === undefined ? 'bypassPermissions' : toolArguments.permissionMode;
+      if (!isClaudePermissionMode(permissionMode)) {
+        throw new McpError(
+          ErrorCode.InvalidParams,
+          `Invalid parameter: permissionMode must be one of ${CLAUDE_PERMISSION_MODES.join(', ')}.`
+        );
+      }
 
       // Determine the working directory
       let effectiveCwd = homedir(); // Default CWD is user's home directory
@@ -521,7 +543,10 @@ export class ClaudeCodeServer {
         }
 
         let processedPrompt = translateSlashCommands(prompt);
-        const claudeProcessArgs = ['--dangerously-skip-permissions'];
+        const claudeProcessArgs =
+          permissionMode === 'bypassPermissions'
+            ? ['--dangerously-skip-permissions']
+            : ['--permission-mode', permissionMode];
         const useSessionContinuity = !stateless && typeof sessionId === 'string' && sessionId.length > 0;
 
         if (useSessionContinuity) {
