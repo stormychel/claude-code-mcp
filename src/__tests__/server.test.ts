@@ -522,6 +522,53 @@ describe('ClaudeCodeServer Unit Tests', () => {
       expect(result.content[0].text).toBe('tool output');
     });
 
+    it('should pass CLAUDE_CLI_TIMEOUT_SECONDS to Claude CLI execution', async () => {
+      process.env.CLAUDE_CLI_TIMEOUT_SECONDS = '42';
+      mockHomedir.mockReturnValue('/home/user');
+      mockExistsSync.mockReturnValue(true);
+
+      const module = await import('../server.js');
+      const { ClaudeCodeServer } = module;
+
+      const server = new ClaudeCodeServer();
+      const mockServerInstance = vi.mocked(Server).mock.results[0].value;
+      const callToolCall = mockServerInstance.setRequestHandler.mock.calls.find(
+        (call: any[]) => call[0].name === 'callTool'
+      );
+
+      const handler = callToolCall[1];
+      const mockProcess = createMockProcess();
+      mockSpawn.mockReturnValue(mockProcess);
+
+      const promise = handler({
+        params: {
+          name: 'claude_code',
+          arguments: {
+            prompt: 'test prompt',
+            workFolder: process.platform === 'win32' ? 'C:\\tmp' : '/tmp'
+          }
+        }
+      });
+
+      setTimeout(() => {
+        mockProcess.stdout['data']('tool output');
+        mockProcess.emit('close', 0);
+      }, 10);
+
+      await promise;
+      expect(mockSpawn.mock.calls[0][2]).toMatchObject({
+        timeout: 42000
+      });
+    });
+
+    it('should expose timeout parsing defaults and validation', async () => {
+      const module = await import('../server.js');
+      expect(module.resolveClaudeCliTimeoutMs()).toBe(3600000);
+      expect(module.resolveClaudeCliTimeoutMs('15')).toBe(15000);
+      expect(module.resolveClaudeCliTimeoutMs('0')).toBe(3600000);
+      expect(module.resolveClaudeCliTimeoutMs('15abc')).toBe(3600000);
+    });
+
     it('should inject first-call context and persist Claude session mapping', async () => {
       mockHomedir.mockReturnValue('/home/user');
       mockExistsSync.mockImplementation((value) => {

@@ -20,6 +20,7 @@ const SERVER_VERSION = "1.10.12";
 
 // Define debugMode globally using const
 const debugMode = process.env.MCP_CLAUDE_DEBUG === 'true';
+const DEFAULT_CLAUDE_CLI_TIMEOUT_SECONDS = 3600;
 
 // Track if this is the first tool use for version printing
 let isFirstToolUse = true;
@@ -32,6 +33,26 @@ export function debugLog(message?: any, ...optionalParams: any[]): void {
   if (debugMode) {
     console.error(message, ...optionalParams);
   }
+}
+
+export function resolveClaudeCliTimeoutMs(envValue = process.env.CLAUDE_CLI_TIMEOUT_SECONDS): number {
+  const raw = envValue?.trim();
+  if (!raw) {
+    return DEFAULT_CLAUDE_CLI_TIMEOUT_SECONDS * 1000;
+  }
+
+  if (!/^\d+$/.test(raw)) {
+    debugLog(`[Warning] Invalid CLAUDE_CLI_TIMEOUT_SECONDS value "${raw}". Using default.`);
+    return DEFAULT_CLAUDE_CLI_TIMEOUT_SECONDS * 1000;
+  }
+
+  const seconds = Number(raw);
+  if (!Number.isSafeInteger(seconds) || seconds <= 0) {
+    debugLog(`[Warning] Invalid CLAUDE_CLI_TIMEOUT_SECONDS value "${raw}". Using default.`);
+    return DEFAULT_CLAUDE_CLI_TIMEOUT_SECONDS * 1000;
+  }
+
+  return seconds * 1000;
 }
 
 /**
@@ -419,7 +440,7 @@ export class ClaudeCodeServer {
     }));
 
     // Handle tool calls
-    const executionTimeoutMs = 1800000; // 30 minutes timeout
+    const executionTimeoutMs = resolveClaudeCliTimeoutMs();
 
     this.server.setRequestHandler(CallToolRequestSchema, async (args, call): Promise<ServerResult> => {
       debugLog('[Debug] Handling CallToolRequest:', args);

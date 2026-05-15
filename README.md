@@ -56,6 +56,7 @@ This MCP server provides one tool that can be used by LLMs to interact with Clau
   Note: The local user installation path (`~/.claude/local/claude`) will still be checked but only for the default `claude` binary.
 
 - `MCP_CLAUDE_DEBUG`: Enable debug logging (set to `true` for verbose output)
+- `CLAUDE_CLI_TIMEOUT_SECONDS`: Override the Claude CLI execution timeout in seconds (default: `3600`)
 
 ## Installation & Usage
 
